@@ -59,7 +59,7 @@ flags.DEFINE_integer('save_interval', 1000,'save outputs every so many batches')
 flags.DEFINE_integer('test_interval', 1000,'evaluate outputs every so many batches')
 flags.DEFINE_integer('resume_iter', -1, 'iteration to resume training from')
 flags.DEFINE_bool('train', True, 'whether to train or test')
-flags.DEFINE_integer('epoch_num', 10000, 'Number of Epochs to train on')
+flags.DEFINE_integer('epoch_num', 2, 'Number of Epochs to train on')
 flags.DEFINE_float('lr', 3e-4, 'Learning for training')
 flags.DEFINE_integer('num_gpus', 1, 'number of gpus to train on')
 
@@ -221,6 +221,7 @@ def train(target_vars, saver, sess, logger, dataloader, resume_iter, logdir):
     best_inception = 0.0
 
     for epoch in range(FLAGS.epoch_num):
+        print("Training epoch:%d"%epoch)
         for data_corrupt, data, label in dataloader:
             data_corrupt = data_corrupt_init = data_corrupt.numpy()
             data_corrupt_init = data_corrupt.copy()
@@ -392,7 +393,7 @@ def train(target_vars, saver, sess, logger, dataloader, resume_iter, logdir):
 
                 score, std = get_inception_score(list(try_im), splits=1)
                 print(
-                    "Inception score of {} with std of {}".format(
+                    "///Inception score of {} with std of {}".format(
                         score, std))
                 kvs = {}
                 kvs['inception_score'] = score
@@ -411,6 +412,7 @@ def train(target_vars, saver, sess, logger, dataloader, resume_iter, logdir):
             if itr > 60000 and FLAGS.dataset == "mnist":
                 assert False
             itr += 1
+            print("Training iteration:%d"%itr)
 
     saver.save(sess, osp.join(FLAGS.logdir, FLAGS.exp, 'model_{}'.format(itr)))
 
@@ -520,7 +522,7 @@ def test(target_vars, saver, sess, logger, dataloader):
         real_ims.extend(list(real_im))
 
     score, std = get_inception_score(test_ims)
-    print("Inception score of {} with std of {}".format(score, std))
+    print("!!!Inception score of {} with std of {}".format(score, std))
 
 
 def main():
@@ -933,10 +935,11 @@ def main():
     print("End broadcast")
 
     if FLAGS.train:
+        print("Training phase")
         train(target_vars, saver, sess,
               logger, data_loader, resume_itr,
               logdir)
-
+    print("Testing phase")
     test(target_vars, saver, sess, logger, data_loader)
 
 

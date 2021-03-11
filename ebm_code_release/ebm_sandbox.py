@@ -445,8 +445,8 @@ def democlass(dataloader, weights, model, target_vars, logdir, sess):
 
 
 def construct_finetune_label(weight, X, Y, Y_GT, model, target_vars):
-    l1_norm = tf.placeholder(shape=(), dtype=tf.float32)
-    l2_norm = tf.placeholder(shape=(), dtype=tf.float32)
+    l1_norm = tf.compat.v1.placeholder(shape=(), dtype=tf.float32)
+    l2_norm = tf.compat.v1.placeholder(shape=(), dtype=tf.float32)
 
     def compute_logit(X, stop_grad=False, num_steps=0):
         batch_size = tf.shape(X)[0]
@@ -507,7 +507,7 @@ def construct_finetune_label(weight, X, Y, Y_GT, model, target_vars):
 
     optimizer = tf.train.AdamOptimizer(1e-3)
     train_op = optimizer.minimize(loss)
-    accuracy = tf.contrib.metrics.accuracy(tf.argmax(logits, axis=1), labels)
+    accuracy = tf.compat.v1.metrics.accuracy(tf.argmax(logits, axis=1), labels)
 
     target_vars['accuracy'] = accuracy
     target_vars['train_op'] = train_op
@@ -671,9 +671,9 @@ def construct_label(weights, X, Y, Y_GT, model, target_vars):
 
     #     Y = Y / tf.reduce_sum(Y, axis=[1], keepdims=True)
 
-    e_bias =  tf.get_variable('e_bias', shape=10, initializer=tf.initializers.zeros())
-    l1_norm = tf.placeholder(shape=(), dtype=tf.float32)
-    l2_norm = tf.placeholder(shape=(), dtype=tf.float32)
+    e_bias =  tf.compat.v1.get_variable('e_bias', shape=10, initializer=tf.initializers.zeros())
+    l1_norm = tf.compat.v1.placeholder(shape=(), dtype=tf.float32)
+    l2_norm = tf.compat.v1.placeholder(shape=(), dtype=tf.float32)
 
     def compute_logit(X, stop_grad=False, num_steps=0):
         batch_size = tf.shape(X)[0]
@@ -685,7 +685,7 @@ def construct_label(weights, X, Y, Y_GT, model, target_vars):
         X_max = X + 8 / 255.
 
         for i in range(num_steps):
-            X = X + tf.random_normal(tf.shape(X), mean=0.0, stddev=0.005)
+            X = X + tf.compat.v1.random_normal(tf.shape(X), mean=0.0, stddev=0.005)
 
             energy_noise = model.forward(X, weights, label=Y, reuse=True)
             x_grad = tf.gradients(energy_noise, [X])[0]
@@ -717,7 +717,7 @@ def construct_label(weights, X, Y, Y_GT, model, target_vars):
             X = X + tf.to_float(tf.random_uniform(tf.shape(X), minval=-8, maxval=9, dtype=tf.int32)) / 255.
 
         logit = compute_logit(X)
-        loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y_GT, logits=logit)
+        loss = tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(labels=Y_GT, logits=logit)
 
         x_grad = tf.sign(tf.gradients(loss, [X])[0]) / 255.
         X = X + 2 * x_grad
@@ -733,11 +733,11 @@ def construct_label(weights, X, Y, Y_GT, model, target_vars):
     labels = tf.argmax(Y_GT, axis=1)
     # max_z = tf.argmax(energy_stopped, axis=1)
 
-    loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=Y_GT, logits=energy_stopped)
-    optimizer = tf.train.AdamOptimizer(1e-2)
+    loss = tf.compat.v1.nn.softmax_cross_entropy_with_logits_v2(labels=Y_GT, logits=energy_stopped)
+    optimizer = tf.compat.v1.train.AdamOptimizer(1e-2)
     train_op = optimizer.minimize(loss)
 
-    accuracy = tf.contrib.metrics.accuracy(tf.argmax(energy_stopped, axis=1), labels)
+    accuracy = tf.compat.v1.metrics.accuracy(tf.argmax(energy_stopped, axis=1), labels)
     target_vars['accuracy'] = accuracy
     target_vars['train_op'] = train_op
     target_vars['l1_norm'] = l1_norm
@@ -783,7 +783,7 @@ def construct_steps(weights, X, Y_GT, model, target_vars):
 
     mask = tf.Variable(tf.convert_to_tensor(mask, dtype=tf.float32), trainable=False)
 
-    # X_targ = tf.placeholder(shape=(None, 32, 32, 3), dtype = tf.float32)
+    # X_targ = tf.compat.v1.placeholder(shape=(None, 32, 32, 3), dtype = tf.float32)
 
     for i in range(FLAGS.num_steps):
         X_old = X
@@ -881,7 +881,7 @@ def main():
     weights = model.construct_weights('context_{}'.format(0))
 
     total_parameters = 0
-    for variable in tf.trainable_variables():
+    for variable in tf.compat.v1.trainable_variables():
         # shape is an array of tf.Dimension
         shape = variable.get_shape()
         variable_parameters = 1
@@ -890,20 +890,20 @@ def main():
         total_parameters += variable_parameters
     print("Model has a total of {} parameters".format(total_parameters))
 
-    config = tf.ConfigProto()
-    sess = tf.InteractiveSession()
+    config = tf.compat.v1.ConfigProto()
+    sess = tf.compat.v1.InteractiveSession()
 
     if FLAGS.task == 'latent':
-        X = tf.placeholder(shape=(None, 64, 64), dtype = tf.float32)
+        X = tf.compat.v1.placeholder(shape=(None, 64, 64), dtype = tf.float32)
     else:
-        X = tf.placeholder(shape=(None, 32, 32, 3), dtype = tf.float32)
+        X = tf.compat.v1.placeholder(shape=(None, 32, 32, 3), dtype = tf.float32)
 
     if FLAGS.dataset == "cifar10":
-        Y = tf.placeholder(shape=(None, 10), dtype = tf.float32)
-        Y_GT = tf.placeholder(shape=(None, 10), dtype = tf.float32)
+        Y = tf.compat.v1.placeholder(shape=(None, 10), dtype = tf.float32)
+        Y_GT = tf.compat.v1.placeholder(shape=(None, 10), dtype = tf.float32)
     elif FLAGS.dataset == "imagenet":
-        Y = tf.placeholder(shape=(None, 1000), dtype = tf.float32)
-        Y_GT = tf.placeholder(shape=(None, 1000), dtype = tf.float32)
+        Y = tf.compat.v1.placeholder(shape=(None, 1000), dtype = tf.float32)
+        Y_GT = tf.compat.v1.placeholder(shape=(None, 1000), dtype = tf.float32)
 
     target_vars = {'X': X, 'Y': Y, 'Y_GT': Y_GT}
 
@@ -918,8 +918,8 @@ def main():
     elif FLAGS.task == 'latent':
         construct_latent(weights, X, Y_GT, model, target_vars)
 
-    sess.run(tf.global_variables_initializer())
-    saver = loader = tf.train.Saver(max_to_keep=10)
+    sess.run(tf.compat.v1.global_variables_initializer())
+    saver = loader = tf.compat.v1.train.Saver(max_to_keep=10)
     savedir = osp.join('cachedir', FLAGS.exp)
     logdir = osp.join(FLAGS.logdir, FLAGS.exp)
     if not osp.exists(logdir):

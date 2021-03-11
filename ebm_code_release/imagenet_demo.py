@@ -2,7 +2,9 @@ from models import ResNet128
 import numpy as np
 import os.path as osp
 from tensorflow.python.platform import flags
-import tensorflow as tf
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import imageio
 from utils import optimistic_restore
 

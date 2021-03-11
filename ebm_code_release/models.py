@@ -263,12 +263,13 @@ class ResNet32(object):
 
 
 class ResNet32Large(object):
-    def __init__(self, num_channels=3, num_filters=128, train=False):
+    def __init__(self, num_channels=3, num_filters=128, train=False, act_fun = tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
         self.dropout = train
         self.train = train
+        self.act = act_fun
 
     def construct_weights(self, scope=''):
         weights = {}
@@ -351,12 +352,13 @@ class ResNet32Large(object):
 
 
 class ResNet32Wider(object):
-    def __init__(self, num_channels=3, num_filters=128, train=False):
+    def __init__(self, num_channels=3, num_filters=128, train=False, act_fun=tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
         self.dropout = train
         self.train = train
+        self.act = act_fun
 
     def construct_weights(self, scope=''):
         weights = {}
@@ -383,7 +385,7 @@ class ResNet32Wider(object):
             init_res_weight(weights, 'res_8', 3, 4*self.dim_hidden, 4*self.dim_hidden, classes=classes)
             init_fc_weight(weights, 'fc5', 4*self.dim_hidden , 1, spec_norm=False)
 
-            init_attention_weight(weights, 'atten', self.dim_hidden, self.dim_hidden / 2, trainable_gamma=True)
+            init_attention_weight(weights, 'atten', self.dim_hidden, int(self.dim_hidden / 2), trainable_gamma=True)
 
         return weights
 
@@ -404,10 +406,11 @@ class ResNet32Wider(object):
                 else:
                     weights[k] = tf.stop_gradient(v)
 
-        if FLAGS.swish_act:
-            act = swish
-        else:
-            act = tf.nn.leaky_relu
+        # if FLAGS.swish_act:
+        #     act = swish
+        # else:
+        #     act = tf.nn.leaky_relu
+        act = self.act
 
         # Make sure gradients are modified a bit
         inp = smart_conv_block(inp, weights, reuse, 'c1_pre', use_stride=False, activation=act)
@@ -446,10 +449,11 @@ class ResNet32Wider(object):
 
 
 class ResNet32Larger(object):
-    def __init__(self, num_channels=3, num_filters=128):
+    def __init__(self, num_channels=3, num_filters=128, act_fun = tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
+        self.act = act_fun
 
     def construct_weights(self, scope=''):
         weights = {}
@@ -481,7 +485,7 @@ class ResNet32Larger(object):
             init_fc_weight(weights, 'fc_dense', 4*4*2*self.dim_hidden, 4*self.dim_hidden)
             init_fc_weight(weights, 'fc5', 4*self.dim_hidden , 1, spec_norm=False)
 
-            init_attention_weight(weights, 'atten', 2*self.dim_hidden, self.dim_hidden / 2, trainable_gamma=True)
+            init_attention_weight(weights, 'atten', 2*self.dim_hidden, int(self.dim_hidden / 2), trainable_gamma=True)
 
         return weights
 
@@ -543,12 +547,13 @@ class ResNet32Larger(object):
 class ResNet128(object):
     """Construct the convolutional network specified in MAML"""
 
-    def __init__(self, num_channels=3, num_filters=64, train=False):
+    def __init__(self, num_channels=3, num_filters=64, train=False, act_fun = tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
         self.dropout = train
         self.train = train
+        self.act = act_fun
 
     def construct_weights(self, scope=''):
         weights = {}
@@ -566,9 +571,8 @@ class ResNet128(object):
             init_res_weight(weights, 'res_9', 3, 8*self.dim_hidden, 8*self.dim_hidden, classes=classes)
             init_res_weight(weights, 'res_10', 3, 8*self.dim_hidden, 8*self.dim_hidden, classes=classes)
             init_fc_weight(weights, 'fc5', 8*self.dim_hidden , 1, spec_norm=False)
-
-
-            init_attention_weight(weights, 'atten', self.dim_hidden, self.dim_hidden / 2., trainable_gamma=True)
+            
+            init_attention_weight(weights, 'atten', self.dim_hidden, self.dim_hidden / 2, trainable_gamma=True)
 
         return weights
 
@@ -590,10 +594,11 @@ class ResNet128(object):
                 else:
                     weights[k] = tf.stop_gradient(v)
 
-        if FLAGS.swish_act:
-            act = swish
-        else:
-            act = tf.nn.leaky_relu
+        # if FLAGS.swish_act:
+        #     act = swish
+        # else:
+        #     act = tf.nn.leaky_relu
+        act = self.act
 
         dropout = self.dropout
         train = self.train
