@@ -10,30 +10,32 @@ flags.DEFINE_bool('swish_act', False, 'use the swish activation for dsprites')
 FLAGS = flags.FLAGS
 
 
+# modified original MnistNet for CIFAR-10 dataset
 class MnistNet(object):
-    def __init__(self, num_channels=1, num_filters=64):
+    def __init__(self, num_channels=3, num_filters=128, act_fun=tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
         self.datasource = FLAGS.datasource
+        self.act = act_fun
 
         if FLAGS.cclass:
             self.label_size = 10
         else:
-            self.label_size = 0
+            self.label_size = 1
 
     def construct_weights(self, scope=''):
         weights = {}
-
         dtype = tf.float32
-        conv_initializer =  tf.compat.v1.keras.initializers.glorot_normal_conv2d(dtype=dtype)
-        fc_initializer =  tf.compat.v1.keras.initializers.glorot_normal(dtype=dtype)
 
-        classes = 1
+        if FLAGS.cclass:
+            classes = 10
+        else:
+            classes = 1
 
         with tf.variable_scope(scope):
-            init_conv_weight(weights, 'c1_pre', 3, 1, 64)
-            init_conv_weight(weights, 'c1', 4, 64, self.dim_hidden, classes=classes)
+            init_conv_weight(weights, 'c1_pre', 3, self.channels, self.dim_hidden)
+            init_conv_weight(weights, 'c1', 4, self.dim_hidden, self.dim_hidden, classes=classes)
             init_conv_weight(weights, 'c2', 4, self.dim_hidden, 2*self.dim_hidden, classes=classes)
             init_conv_weight(weights, 'c3', 4, 2*self.dim_hidden, 4*self.dim_hidden, classes=classes)
             init_fc_weight(weights, 'fc_dense', 4*4*4*self.dim_hidden, 2*self.dim_hidden, spec_norm=True)
@@ -42,18 +44,19 @@ class MnistNet(object):
         if FLAGS.cclass:
             self.label_size = 10
         else:
-            self.label_size = 0
+            self.label_size = 1
         return weights
 
     def forward(self, inp, weights, reuse=False, scope='', stop_grad=False, label=None, **kwargs):
         channels = self.channels
         weights = weights.copy()
-        inp = tf.reshape(inp, (tf.shape(inp)[0], 28, 28, 1))
+        # inp = tf.reshape(inp, (tf.shape(inp)[0], 28, 28, 1))
+        # inp = tf.reshape(inp, (tf.shape(inp)[0], 64, 64, 1))
 
-        if FLAGS.swish_act:
-            act = swish
-        else:
-            act = tf.nn.leaky_relu
+        # if FLAGS.swish_act:
+        #     act = swish
+        # else:
+        #     act = tf.nn.leaky_relu
 
         if stop_grad:
             for k, v in weights.items():
@@ -69,16 +72,17 @@ class MnistNet(object):
             label_d = tf.reshape(label, shape=(tf.shape(label)[0], 1, 1, self.label_size))
             inp = conv_cond_concat(inp, label_d)
 
-        h1 = smart_conv_block(inp, weights, reuse, 'c1_pre', use_stride=False, activation=act)
-        h2 = smart_conv_block(h1, weights, reuse, 'c1', use_stride=True, downsample=True, label=label, extra_bias=False, activation=act)
-        h3 = smart_conv_block(h2, weights, reuse, 'c2', use_stride=True, downsample=True, label=label, extra_bias=False, activation=act)
-        h4 = smart_conv_block(h3, weights, reuse, 'c3', use_stride=True, downsample=True, label=label, use_scale=False, extra_bias=False, activation=act)
+        h1 = smart_conv_block(inp, weights, reuse, 'c1_pre', use_stride=False, activation=self.act)
+        h2 = smart_conv_block(h1, weights, reuse, 'c1', use_stride=True, downsample=True, label=label, extra_bias=False, activation=self.act)
+        h3 = smart_conv_block(h2, weights, reuse, 'c2', use_stride=True, downsample=True, label=label, extra_bias=False, activation=self.act)
+        h4 = smart_conv_block(h3, weights, reuse, 'c3', use_stride=True, downsample=True, label=label, use_scale=False, extra_bias=False, activation=self.act)
 
         h5 = tf.reshape(h4, [-1, np.prod([int(dim) for dim in h4.get_shape()[1:]])])
-        h6 = act(smart_fc_block(h5, weights, reuse, 'fc_dense'))
+        h6 = self.act(smart_fc_block(h5, weights, reuse, 'fc_dense'))
         hidden6 = smart_fc_block(h6, weights, reuse, 'fc5')
+        energy = hidden6
 
-        return hidden6
+        return energy
 
 
 class DspritesNet(object):
@@ -128,8 +132,9 @@ class DspritesNet(object):
         weights = {}
 
         dtype = tf.float32
-        conv_initializer =  tf.compat.v1.keras.initializers.glorot_normal_conv2d(dtype=dtype)
-        fc_initializer =  tf.compat.v1.keras.initializers.glorot_normal(dtype=dtype)
+
+        # conv_initializer = tf.compat.v1.keras.initializers.glorot_normal_conv2d(dtype=dtype)
+        # fc_initializer =  tf.compat.v1.keras.initializers.glorot_normal(dtype=dtype)
         k = 5
         classes = self.label_size
 
@@ -188,11 +193,12 @@ class DspritesNet(object):
 
 
 class ResNet32(object):
-    def __init__(self, num_channels=3, num_filters=128):
+    def __init__(self, num_channels=3, num_filters=128, act_fun=tf.nn.leaky_relu):
 
         self.channels = num_channels
         self.dim_hidden = num_filters
         self.groupsort = groupsort()
+        self.act_fun = act_fun
 
     def construct_weights(self, scope=''):
         weights = {}
@@ -215,7 +221,7 @@ class ResNet32(object):
             init_fc_weight(weights, 'fc_dense', 4*4*2*self.dim_hidden, 4*self.dim_hidden)
             init_fc_weight(weights, 'fc5', 2*self.dim_hidden , 1, spec_norm=False)
 
-            init_attention_weight(weights, 'atten', 2*self.dim_hidden, self.dim_hidden / 2, trainable_gamma=True)
+            init_attention_weight(weights, 'atten', 2*self.dim_hidden, int(self.dim_hidden / 2), trainable_gamma=True)
 
         return weights
 
@@ -223,7 +229,7 @@ class ResNet32(object):
         weights = weights.copy()
         batch = tf.shape(inp)[0]
 
-        act = tf.nn.leaky_relu
+        # act = tf.nn.leaky_relu
 
         if not FLAGS.cclass:
             label = None
@@ -241,16 +247,16 @@ class ResNet32(object):
         # Make sure gradients are modified a bit
         inp = smart_conv_block(inp, weights, reuse, 'c1_pre', use_stride=False)
 
-        hidden1 = smart_res_block(inp, weights, reuse, 'res_optim', adaptive=False, label=label, act=act)
-        hidden2 = smart_res_block(hidden1, weights, reuse, 'res_1', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, act=act)
-        hidden3 = smart_res_block(hidden2, weights, reuse, 'res_2', stop_batch=stop_batch, label=label, act=act)
+        hidden1 = smart_res_block(inp, weights, reuse, 'res_optim', adaptive=False, label=label, act=self.act_fun)
+        hidden2 = smart_res_block(hidden1, weights, reuse, 'res_1', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, act=self.act_fun)
+        hidden3 = smart_res_block(hidden2, weights, reuse, 'res_2', stop_batch=stop_batch, label=label, act=self.act_fun)
 
         if FLAGS.use_attention:
             hidden4 = smart_atten_block(hidden3, weights, reuse, 'atten', stop_at_grad=stop_at_grad, label=label)
         else:
-            hidden4 = smart_res_block(hidden3, weights, reuse, 'res_3', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, act=act)
+            hidden4 = smart_res_block(hidden3, weights, reuse, 'res_3', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, act=self.act_fun)
 
-        hidden5 = smart_res_block(hidden4, weights, reuse, 'res_4', stop_batch=stop_batch, adaptive=False, label=label, act=act)
+        hidden5 = smart_res_block(hidden4, weights, reuse, 'res_4', stop_batch=stop_batch, adaptive=False, label=label, act=self.act_fun)
         compact = hidden6 = smart_res_block(hidden5, weights, reuse, 'res_5', adaptive=False, downsample=False, stop_batch=stop_batch, label=label)
         hidden6 = tf.nn.relu(hidden6)
         hidden5 = tf.reduce_sum(hidden6, [1, 2])
@@ -322,21 +328,21 @@ class ResNet32Large(object):
         train = self.train
 
         hidden1 = smart_res_block(inp, weights, reuse, 'res_optim', adaptive=False, label=label, dropout=dropout, train=train)
-        hidden2 = smart_res_block(hidden1, weights, reuse, 'res_1', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, dropout=dropout, train=train)
-        hidden3 = smart_res_block(hidden2, weights, reuse, 'res_2', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, dropout=dropout, train=train)
-        hidden4 = smart_res_block(hidden3, weights, reuse, 'res_3', stop_batch=stop_batch, label=label, dropout=dropout, train=train)
+        hidden2 = smart_res_block(hidden1, weights, reuse, 'res_1', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, dropout=dropout, train=train, act=self.act)
+        hidden3 = smart_res_block(hidden2, weights, reuse, 'res_2', stop_batch=stop_batch, downsample=False, adaptive=False, label=label, dropout=dropout, train=train, act=self.act)
+        hidden4 = smart_res_block(hidden3, weights, reuse, 'res_3', stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
 
         if FLAGS.use_attention:
             hidden5 = smart_atten_block(hidden4, weights, reuse, 'atten', stop_at_grad=stop_at_grad)
         else:
-            hidden5 = smart_res_block(hidden4, weights, reuse, 'res_4', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train)
+            hidden5 = smart_res_block(hidden4, weights, reuse, 'res_4', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
 
-        hidden6 = smart_res_block(hidden5, weights, reuse, 'res_5', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train)
+        hidden6 = smart_res_block(hidden5, weights, reuse, 'res_5', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
 
-        hidden7 = smart_res_block(hidden6, weights, reuse, 'res_6', stop_batch=stop_batch, label=label, dropout=dropout, train=train)
-        hidden8 = smart_res_block(hidden7, weights, reuse, 'res_7', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train)
+        hidden7 = smart_res_block(hidden6, weights, reuse, 'res_6', stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
+        hidden8 = smart_res_block(hidden7, weights, reuse, 'res_7', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
 
-        compact = hidden9 = smart_res_block(hidden8, weights, reuse, 'res_8', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train)
+        compact = hidden9 = smart_res_block(hidden8, weights, reuse, 'res_8', adaptive=False, downsample=False, stop_batch=stop_batch, label=label, dropout=dropout, train=train, act=self.act)
 
         if FLAGS.cclass:
             hidden6 = tf.nn.leaky_relu(hidden9)
@@ -572,7 +578,7 @@ class ResNet128(object):
             init_res_weight(weights, 'res_10', 3, 8*self.dim_hidden, 8*self.dim_hidden, classes=classes)
             init_fc_weight(weights, 'fc5', 8*self.dim_hidden , 1, spec_norm=False)
             
-            init_attention_weight(weights, 'atten', self.dim_hidden, self.dim_hidden / 2, trainable_gamma=True)
+            init_attention_weight(weights, 'atten', self.dim_hidden, int(self.dim_hidden / 2), trainable_gamma=True)
 
         return weights
 

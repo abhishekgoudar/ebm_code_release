@@ -23,6 +23,7 @@ from custom_adam import AdamOptimizer
 from scipy.misc import imsave
 import matplotlib.pyplot as plt
 from hmc import hmc
+from activation_func_ea import *
 
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
@@ -91,6 +92,7 @@ flags.DEFINE_bool('use_attention', False, 'Whether to use self attention in netw
 flags.DEFINE_bool('large_model', False, 'whether to use a large model')
 flags.DEFINE_bool('larger_model', False, 'Deeper ResNet32 Network')
 flags.DEFINE_bool('wider_model', False, 'Wider ResNet32 Network')
+flags.DEFINE_bool('mnist_model', False, 'Mnist Network')
 
 # Dataset settings
 flags.DEFINE_bool('mixup', False, 'whether to add mixup to training images')
@@ -463,6 +465,7 @@ def test(target_vars, saver, sess, logger, dataloader):
 
     for i, (im, energy_i, t_im, energy, label_i, actual_im_i) in enumerate(
             zip(orig_im, energy_orig, try_im, energy, label, actual_im)):
+        print("Generating new image:%d"%i)
         label_i = np.array(label_i)
 
         shape = orig_im.shape[1:]
@@ -499,7 +502,8 @@ def test(target_vars, saver, sess, logger, dataloader):
     test_ims = list(try_im)
     real_ims = list(actual_im)
 
-    for i in tqdm(range(50000 // FLAGS.batch_size + 1)):
+    for i in tqdm(range(1000 // FLAGS.batch_size + 1)):
+        print("Generating test and real images:%d"%i)
         try:
             data_corrupt, data, label = dataloader_iterator.next()
         except BaseException:
@@ -528,23 +532,33 @@ def test(target_vars, saver, sess, logger, dataloader):
 
 def setup(act_fun):
     channel_num = 3
-    if FLAGS.large_model:
+    if FLAGS.mnist_model:
+        print("------------------Using MNIST model------------")
+        model = MnistNet(
+            num_channels=channel_num,
+            num_filters=128,
+            act_fun=act_fun)
+    elif FLAGS.large_model:
+        print("------------------Using ResNet32Large model------------")
         model = ResNet32Large(
             num_channels=channel_num,
             num_filters=128,
             train=True,
             act_fun=act_fun)
     elif FLAGS.larger_model:
+        print("------------------Using ResNet32Larger model------------")
         model = ResNet32Larger(
             num_channels=channel_num,
             num_filters=128,
             act_fun=act_fun)
     elif FLAGS.wider_model:
+        print("------------------Using ResNet32Wider model------------")
         model = ResNet32Wider(
             num_channels=channel_num,
             num_filters=192,
             act_fun=act_fun)
     else:
+        print("------------------Using ResNet32 model------------")
         model = ResNet32(
             num_channels=channel_num,
             num_filters=128,
@@ -864,12 +878,20 @@ if __name__ == "__main__":
     data_loader = DataLoader(train_dataset_1, batch_size=FLAGS.batch_size, num_workers=FLAGS.data_workers, drop_last=True, shuffle=True)   
     print("Done loading...")
 
+    base_functions=[elu,gelu,linear,relu,selu,sigmoid,softplus,swish,tanh,atan,cos,erf,sin,sqrt]
+    base_operations=[maximum,minimum,add,subtract]
+
+    evo=EvolutionaryAlgorithm(base_functions,base_operations,min_depth=1,max_depth=3,pop_size=10)
+    initial_gen = evo.create_generation()
+    custom_act = compile(initial_gen[0], pset=evo.pset)
+
     ebm_prob = EBMProbML(tf.nn.leaky_relu)
+    # ebm_prob = EBMProbML(custom_act)
     train_inc_score = ebm_prob.train_unconditional(data_loader)
     print("Training inception score:%f"%train_inc_score)
 
     test_dataset = Cifar10(train=False, rescale=FLAGS.rescale, path=path)
-    test_dataset_1 = torch.utils.data.Subset(test_dataset, list(range(0, 1000, 2)))
+    test_dataset_1 = torch.utils.data.Subset(test_dataset, list(range(0, 500, 2)))
     print("Length of test dataset:%d"%len(test_dataset_1))
     data_loader_1 = DataLoader(test_dataset_1, batch_size=FLAGS.batch_size, num_workers=FLAGS.data_workers, drop_last=True, shuffle=True)   
     print("Done loading...")
